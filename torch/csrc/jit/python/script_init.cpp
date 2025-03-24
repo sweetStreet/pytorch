@@ -56,6 +56,7 @@
 #include <torch/csrc/api/include/torch/ordered_dict.h>
 
 #include <ATen/ATen.h>
+#include <ATen/core/alias_info.h>
 #include <ATen/core/function_schema.h>
 #include <ATen/core/ivalue.h>
 #include <ATen/core/qualified_name.h>
@@ -311,6 +312,40 @@ FunctionSchema getSchemaWithNameAndDefaults(
       schema.returns(),
       schema.is_vararg(),
       schema.is_varret());
+}
+
+TypePtr createTupleType(std::vector<TypePtr> types) {
+  return TupleType::create(types);
+}
+
+AliasInfo createAliasInfo(std::string arg_name, bool is_write) {
+  auto alias_info = AliasInfo();
+  // This follows the schema parser implmentation
+  alias_info.addBeforeSet(
+        Symbol::fromQualString("alias::$" + arg_name));
+  alias_info.setIsWrite(is_write);
+  return alias_info;
+}
+
+Argument createArgument(
+    std::string name,
+    const TypePtr& type,
+    std::optional<int32_t> N,
+    std::optional<IValue> default_value,
+    bool kwarg_only,
+    std::optional<AliasInfo> alias_info) {
+  return Argument(name, type, N, default_value, kwarg_only, alias_info);
+}
+
+FunctionSchema createFunctionSchema(
+    std::string name,
+    std::string overload_name,
+    std::vector<Argument> arguments,
+    std::vector<Argument> returns,
+    bool is_vararg,
+    bool is_varret) {
+  return FunctionSchema(
+      name, overload_name, arguments, returns, is_vararg, is_varret);
 }
 
 static Decl mergeDefaultsAndExtraParametersToOverloadDecl(
@@ -1877,6 +1912,10 @@ void initJitScriptBindings(PyObject* module) {
   m.def("_test_only_populate_upgraders", &test_only_populate_upgraders);
   m.def("_test_only_remove_upgraders", &test_only_remove_upgraders);
 
+  m.def("_create_argument", &createArgument);
+  m.def("_create_function_schema", &createFunctionSchema);
+  m.def("_create_alias_info", &createAliasInfo);
+  m.def("_create_tuple_type", &createTupleType);
   m.def("merge_type_from_type_comment", &mergeTypesFromTypeComment);
   m.def("_get_max_operator_version", &getMaxOperatorVersion);
   m.def("_get_operator_version_map", &get_operator_version_map);
