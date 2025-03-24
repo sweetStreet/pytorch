@@ -33,6 +33,7 @@ elif [[ ${CUDA_VERSION:0:2} == "11" ]]; then
     pip install nvidia-nccl-cu11
 fi
 
+export USE_SYSTEM_NCCL=1
 if [[ "$BUILD_ENVIRONMENT" == *cuda* ]]; then
   # Use jemalloc during compilation to mitigate https://github.com/pytorch/pytorch/issues/116289
   export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
