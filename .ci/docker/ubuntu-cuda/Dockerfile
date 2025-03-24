@@ -152,6 +152,12 @@ COPY ./common/install_cusparselt.sh install_cusparselt.sh
 RUN bash install_cusparselt.sh
 RUN rm install_cusparselt.sh
 
+# Install NCCL
+ARG CUDA_VERSION
+COPY ./common/install_nccl.sh install_nccl.sh
+RUN bash install_nccl.sh
+RUN rm install_nccl.sh
+
 # Install CUDSS
 ARG CUDA_VERSION
 COPY ./common/install_cudss.sh install_cudss.sh
