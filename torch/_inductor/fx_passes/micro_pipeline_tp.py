@@ -253,8 +253,12 @@ def find_reduce_scatter_patterns(graph: torch.fx.Graph):
         )
 
     # Matches funcol.reduce_scatter_tensor with scatter_dim == 0
-    zero_dim_reduce_scatter_pattern_single_user = reduce_scatter_template(KeywordArg("input"), users=1)
-    zero_dim_reduce_scatter_pattern_multi_user = reduce_scatter_template(KeywordArg("input"), users=MULTIPLE)
+    zero_dim_reduce_scatter_pattern_single_user = reduce_scatter_template(
+        KeywordArg("input"), users=1
+    )
+    zero_dim_reduce_scatter_pattern_multi_user = reduce_scatter_template(
+        KeywordArg("input"), users=MULTIPLE
+    )
 
     # Matches funcol.reduce_scatter_tensor with scatter_dim > 0
     non_zero_dim_reduce_scatter_pattern_single_user = reduce_scatter_template(
