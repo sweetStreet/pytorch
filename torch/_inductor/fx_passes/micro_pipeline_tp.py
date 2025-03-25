@@ -827,7 +827,7 @@ def _insert_fused_matmul_reduce_scatter(
         raise AssertionError(f"Unexpected matmul match type: {type(matmul)}")
 
 
-def fuse_matmul_reduce_scatter(reduce_scatter: _ReduceScatterMatch) -> bool:
+def fuse_matmul_reduce_scatter(reduce_scatter: _ReduceScatterMatch) -> None:
     """
     Fused the pattern
 
@@ -841,14 +841,9 @@ def fuse_matmul_reduce_scatter(reduce_scatter: _ReduceScatterMatch) -> bool:
 
     Returns boolean indicating if fusion was successful or not.
     """
-    if (
-        not torch.distributed.is_available()
-        or not torch.distributed.is_nccl_available()
-    ):
-        log.debug(
-            "torch.distributed is not available, skipping fuse_matmul_reduce_scatter fusion"
-        )
-        return False
+    assert (
+        torch.distributed.is_available() or torch.distributed.is_nccl_available()
+    ), "torch.distributed must be available to use async tensor parallelism"
 
     from torch.distributed._symmetric_memory import (
         is_symm_mem_enabled_for_group,
@@ -864,35 +859,30 @@ def fuse_matmul_reduce_scatter(reduce_scatter: _ReduceScatterMatch) -> bool:
         reduce_scatter.group_name,
     )
 
-    if not is_symm_mem_enabled_for_group(group_name):
-        log.debug(
-            "symmetric memory is not enabled for process group %s, skipping fuse_matmul_reduce_scatter fusion",
-            group_name,
-        )
-        return False
+    assert is_symm_mem_enabled_for_group(group_name), f"symmetric memory is not enabled for process group {group_name}, skipping fuse_matmul_reduce_scatter fusion"
 
     # Currently fused_matmul_reduce_scatter doesn't return the matmul result,
     # so we can't apply the fusion if the matmul result is used by multiple
     # users. This is not a fundamental limitation of the fused op and can be
     # addressed if needed.
     if len(input_node.users) != 1:
-        log.debug(
+        log.warning(
             "matmul result has more than one user, skipping fused_matmul_reduce_scatter fusion."
         )
-        return False
+        return
 
     matmul = _find_producer_matmul(input_node)
     if matmul is None:
-        log.debug(
+        log.warning(
             "no producer matmul found for reduce scatter, skipping fuse_matmul_reduce_scatter fusion"
         )
-        return False
+        return
 
     if rs_res_node in matmul.arg_ancestor_nodes:
-        log.debug(
+        log.warning(
             "reduce-scatter result node is an ancestor of matmul, skipping fuse_matmul_reduce_scatter fusion"
         )
-        return False
+        return
 
     # We need to track 3 values for the fused scaled mm reduce scatter implementation:
     #   1. The scatter dim before the reshape, which was assigned using the original (a,b,c) @ (c,d) = (a,b,d) dims.
@@ -955,7 +945,6 @@ def fuse_matmul_reduce_scatter(reduce_scatter: _ReduceScatterMatch) -> bool:
             fused_node.prepend(node)
 
     log.debug("successfully fused matmul reduce scatter")
-    return True
 
 
 def _get_node_to_ancestors(
@@ -1066,10 +1055,5 @@ def micro_pipeline_tp_pass(graph: torch.fx.Graph):
     for all_gather in all_gathers:
         fuse_all_gather_matmul(all_gather)
 
-    fused_reduce_scatters = False
     for reduce_scatter in reduce_scatters:
-        if fuse_matmul_reduce_scatter(reduce_scatter):
-            fused_reduce_scatters = True
-
-    # if reduce_scatters and not fused_reduce_scatters:
-    #     raise AssertionError("no successful fusions of matul-reduce-scatters")
+        fuse_matmul_reduce_scatter(reduce_scatter)
