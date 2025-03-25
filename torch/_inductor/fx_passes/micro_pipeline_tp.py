@@ -211,7 +211,24 @@ class _ReduceScatterMatch:
     group_name: str
 
     def replace_with(self, new_node: torch.fx.Node) -> None:
+        # Replace all uses of the result node (wait_tensor) with the fused node.
         self.res_node.replace_all_uses_with(new_node)
+
+        # If the reduce-scatter result is saved for backward, save the fused node for backward instead.
+        self._update_save_for_backward(new_node)
+
+    def _update_save_for_backward(self, new_node: torch.fx.Node) -> None:
+        """
+        If the output node is a user of the reduce_scatter node (indicating the reduce_scatter
+        result is saved for backward), this method will update the output node to use the fused node instead.
+        """
+        output_node = None
+        for user in self.rs_node.users:
+            if user.target == "output":
+                output_node = user
+                break
+        if output_node is not None:
+            output_node.replace_input_with(self.rs_node, new_node)
 
     def erase(self) -> None:
         for node in reversed(self.match.nodes):
