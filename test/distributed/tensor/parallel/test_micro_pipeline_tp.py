@@ -492,7 +492,6 @@ class MicroPipelineTPTest(TestCase):
                 gm.graph,
             )
 
-
     @unittest.skipIf(not HAS_GPU, "Inductor+gpu needs triton and recent GPU arch")
     @parametrize("shard_dim", [0, 1])
     @fresh_inductor_cache()

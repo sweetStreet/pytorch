@@ -256,8 +256,10 @@ def find_reduce_scatter_patterns(graph: torch.fx.Graph):
     zero_dim_reduce_scatter_pattern_single_user = reduce_scatter_template(
         KeywordArg("input"), users=1
     )
+
+    # Two users will occur when the reduce-scatter result is saved for backward
     zero_dim_reduce_scatter_pattern_multi_user = reduce_scatter_template(
-        KeywordArg("input"), users=MULTIPLE
+        KeywordArg("input"), users=2
     )
 
     # Matches funcol.reduce_scatter_tensor with scatter_dim > 0
@@ -281,6 +283,7 @@ def find_reduce_scatter_patterns(graph: torch.fx.Graph):
         users=1,
     )
 
+    # Two users will occur when the reduce-scatter result is saved for backward
     non_zero_dim_reduce_scatter_pattern_multi_user = reduce_scatter_template(
         CallFunction(
             aten.cat.default,
@@ -298,7 +301,7 @@ def find_reduce_scatter_patterns(graph: torch.fx.Graph):
                 )
             ),
         ),
-        users=MULTIPLE,
+        users=2,
     )
 
     reduce_scatters = []
@@ -841,9 +844,9 @@ def fuse_matmul_reduce_scatter(reduce_scatter: _ReduceScatterMatch) -> None:
 
     Returns boolean indicating if fusion was successful or not.
     """
-    assert (
-        torch.distributed.is_available() or torch.distributed.is_nccl_available()
-    ), "torch.distributed must be available to use async tensor parallelism"
+    assert torch.distributed.is_available() or torch.distributed.is_nccl_available(), (
+        "torch.distributed must be available to use async tensor parallelism"
+    )
 
     from torch.distributed._symmetric_memory import (
         is_symm_mem_enabled_for_group,
@@ -859,7 +862,9 @@ def fuse_matmul_reduce_scatter(reduce_scatter: _ReduceScatterMatch) -> None:
         reduce_scatter.group_name,
     )
 
-    assert is_symm_mem_enabled_for_group(group_name), f"symmetric memory is not enabled for process group {group_name}, skipping fuse_matmul_reduce_scatter fusion"
+    assert is_symm_mem_enabled_for_group(group_name), (
+        f"symmetric memory is not enabled for process group {group_name}, skipping fuse_matmul_reduce_scatter fusion"
+    )
 
     # Currently fused_matmul_reduce_scatter doesn't return the matmul result,
     # so we can't apply the fusion if the matmul result is used by multiple
